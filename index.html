@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ɔhess</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div id="UI">
+    <h1>Ɔhess</h1>
+
+        <div class="mainButtons">
+            <button id="start" class="btn" onclick="startGame()">▶️ スタート</button>
+            <button id="rule" class="btn" onclick="rulebook()">ルール</button>
+        </div>
+        <div class="subButtons">
+            <button id="setting" class="btn" onclick="setting()">カラーモード変更</button>
+        </div>
+    </div>
+    <div id="game" style="
+        display:flex;
+        justify-content:center;
+        width:100%;">
+        <div id="container" hidden="true" style="position:relative;">
+            <div id="board">
+                <div id="grid"></div>
+                <canvas id="can" style="position:absolute;top:0;left:0;"></canvas>
+            </div>
+            <div id="sentaku" style="text-align:center;" hidden="true">
+                <button onclick="choosePiece('Q')"><img src="0_queen.png" alt="Queen"></button>
+                <button onclick="choosePiece('R')"><img src="0_rook.png" alt="Rook"></button>
+                <button onclick="choosePiece('B')"><img src="0_bishop.png" alt="Bishop"></button>
+                <button onclick="choosePiece('N')"><img src="0_knight.png" alt="Knight"></button>
+            </div>
+        </div>
+    </div>
+    <div id="modePanel" class="panel" hidden="true">
+        <div class="panelContent">
+            <h3>モード選択</h3>
+            <button onclick="startWithMode(0)">公式ルール</button>
+            <button onclick="startWithMode(1)">ランダム配置</button>
+            <button id = "cansel"onclick="closePanel()">キャンセル</button>
+        </div>
+    </div>
+    <div id="ruleOverlay" hidden>
+        <div class="ruleBox">
+            <button id="closeRule">✕</button>
+            <div id="ruleContent"></div>
+        </div>
+    </div>
+    <script src = "index.js"></script>
+</body>
+</html>

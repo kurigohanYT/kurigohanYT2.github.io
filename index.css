@@ -1,0 +1,284 @@
+/* =====================
+   レイアウト
+===================== */
+#game,
+#container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#container[hidden] {
+  display: none;
+}
+
+/* =====================
+   盤面
+===================== */
+#board {
+  position: relative;
+
+  width: fit-content;
+  height: fit-content;
+}
+/* canvasを上に重ねる */
+#can {
+  position: absolute;
+  inset: 0;
+}
+
+#grid {
+  position: relative;
+  z-index: 1;
+}
+
+/* マス */
+#grid div {
+  border: 1px solid black;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  font-size: clamp(14px, 6vw, 32px);
+
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+/* =====================
+   ボタン共通
+===================== */
+.btn {
+  font-size: clamp(16px, 5vw, 24px);
+  padding: 12px 16px;
+
+  border-radius: 12px;
+  border: none;
+
+  display: block;
+  text-align: center;
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  transition: transform 0.1s ease;
+}
+
+.btn:active {
+  transform: scale(0.95);
+}
+
+/* hoverはPCのみ */
+@media (hover: hover) {
+  .btn:hover {
+    transform: scale(1.03);
+  }
+}
+
+/* =====================
+   選択ボタン群
+===================== */
+#sentaku {
+  display: flex;
+  margin-top: 8px;
+}
+
+#sentaku button {
+  width: clamp(48px, 12vw, 72px);
+  height: clamp(48px, 12vw, 72px);
+
+  font-size: clamp(18px, 4vw, 32px);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  border-radius: 12px;
+}
+
+#sentaku button img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+#sentaku[hidden]{
+  display: none !important;
+}
+
+/* =====================
+   パネル（下から出るUI）
+===================== */
+.panel {
+  position: fixed;
+  inset: 0;
+
+  background: rgba(0,0,0,0.3);
+
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panelContent {
+  background: white;
+  color: #222;
+
+  width: 100%;
+  max-width: 400px;
+
+  border-radius: 20px 20px 0 0;
+  padding: 20px;
+
+  box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+
+/* 表示状態 */
+.panel.show .panelContent {
+  transform: translateY(0);
+}
+
+/* ボタン色 */
+.panelContent button:nth-child(2) {
+  background: #4CAF50;
+  color: white;
+}
+
+.panelContent button:nth-child(3) {
+  background: #2196F3;
+  color: white;
+}
+
+.panelContent button:nth-child(4) {
+  background: #ddd;
+  color: #333;
+}
+
+/* =====================
+   ルール画面
+===================== */
+#ruleOverlay {
+  position: fixed;
+  inset: 0;
+
+  background: rgba(0,0,0,0.4);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  z-index: 2000;
+}
+
+#ruleOverlay[hidden] {
+  display: none;
+}
+
+.ruleBox {
+  background: white;
+  width: 90%;
+  max-width: 400px;
+
+  max-height: 70vh;
+  overflow-y: auto;
+
+  box-sizing: border-box;
+
+  border-radius: 15px;
+  border: 2px solid black;
+
+  padding: 20px;
+  padding-right: 26px;
+
+  position: relative;
+}
+.ruleBox h3 {
+  margin-top: 15px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 3px;
+}
+
+.ruleBox ul {
+  padding-left: 20px;
+}
+
+.ruleBox li {
+  margin-bottom: 5px;
+}
+
+/* 閉じるボタン */
+.closeBtn,
+#closeRule {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+
+  width: 35px;
+  height: 35px;
+
+  border-radius: 50%;
+  border: none;
+
+  background: #ddd;
+  cursor: pointer;
+}
+
+/* =====================
+   UIエリア
+===================== */
+#UI {
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+#UI button {
+  display: block;
+  width: min(85%, 360px);
+  margin: 16px auto;
+}
+
+#UI #start {
+  margin-top: 24px;
+  margin-bottom: 24px;
+  font-size: clamp(20px, 6vw, 32px);
+}
+
+body {
+  background:#e8edf2;
+  margin: 0;
+}
+
+#UI {
+  background: #f7f7f7;
+  border-radius: 20px;
+  padding: 20px 10px 30px;
+  margin-top: 20px;
+}
+#UI h1 {
+  margin-top: 40px;
+  margin-bottom: 30px;
+  font-family: Arial, sans-serif;
+  font-size: clamp(28px, 6vw, 40px);
+}
+
+.btn {
+  font-weight: bold;
+}
+
+.mainButtons {
+  background: #f7f7f7;
+  border-radius: 20px;
+  padding: 20px 10px;
+}
