@@ -246,7 +246,9 @@ var y = Math.floor((e.clientY - rect.top) / size);
         return;
     }
     if(!CanMove(turn)){ alert((turn==0?"黒":"白")+"の勝ち"); StartGame=false; return; }
-
+    if(King_Flag()==1){alert("黒の勝ち")}
+    if(King_Flag()==2)alert("白の勝ち")
+                       
     if(piece!="　"){
         nextX=[]; nextY=[]; lastX=x; lastY=y;
         pickpieceX = x; pickpieceY = y;
@@ -339,6 +341,26 @@ function twoPiece(){
     }
     if(one<=2){ alert("白の駒が2個以下になりました。黒の勝ち！"); StartGame=false; }
     else if(two<=2){ alert("黒の駒が2個以下になりました。白の勝ち！"); StartGame=false; }
+}
+
+function King_Flag(){
+    var white = false
+    var black = false
+for(var i=0;i<h;i++){
+    for(var j=0;j<w;j++){
+        if(board[i][j][0]=="K"){
+            if(board[i][k][1]=="0")white=true
+            else black = true
+        }
+    }
+}
+    if(!white){
+        return 1
+    }else if(!black){
+        return 2
+    }else{
+        return 0
+    }
 }
 
 function Piece_to_Stone(x, y) {
@@ -1019,5 +1041,7 @@ function aiTurn(){
     turn = (turn + 1) % 2;
     console.log(turn)
     gameHistory.push(boardToString());
+    if(King_Flag()==1){alert("黒の勝ち")}
+    if(King_Flag()==2)alert("白の勝ち")
     flipText();
 }
