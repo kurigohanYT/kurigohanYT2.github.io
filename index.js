@@ -64,6 +64,8 @@ var placingColor = "0"; // 白から
 var remainingPieces = [];
 var selectedPiece = null;
 
+var playMode = 0;// 0:対人戦, 1:コンピューター対戦
+
 // 初期化
 function init(){
     board = [];
@@ -98,6 +100,11 @@ function init(){
     }
     if(rule==0) kousiki();
     else random();
+    if(playMode == 1 && Math.floor(Math.random() * 2) == 0){
+        setTimeout(aiTurn,100);
+    }else if(playMode == 1){
+        turn = 1;
+    }
 }
 var pngname = {"K0":"0_king.png","Q0":"0_queen.png","R0":"0_rook.png","B0":"0_bishop.png","N0":"0_knight.png","P0":"0_pawn.png",
                "K1":"1_king.png","Q1":"1_queen.png","R1":"1_rook.png","B1":"1_bishop.png","N1":"1_knight.png","P1":"1_pawn.png",
@@ -155,6 +162,8 @@ function nextGame(){
     container.removeChildren();
     init();
 }
+var playerColor = "1";
+var aiColor = "0";
 function resetBoard(){
     for(var i=0;i<w;i++){
         for(var j=0;j<h;j++){
@@ -231,6 +240,11 @@ var y = Math.floor((e.clientY - rect.top) / size);
 
     var piece=board[y][x][0];
     if(board[y][x][1]!=String(turn) && board[y][x]!="　") return;
+    if(board[y][x][1] != String(turn) && board[y][x] != "　") return;
+
+    if(playMode == 1 && turn != Number(playerColor)){
+        return;
+    }
     if(!CanMove(turn)){ alert((turn==0?"黒":"白")+"の勝ち"); StartGame=false; return; }
 
     if(piece!="　"){
@@ -253,6 +267,9 @@ var y = Math.floor((e.clientY - rect.top) / size);
                 cells[y][x].src=pngname[board[y][x]];
                 cells[y][x].style.color=board[y][x][1]=="0"?"red":"blue";
                 turn=(turn+1)%2;
+                if(playMode == 1 && turn == Number(aiColor)){
+                    setTimeout(aiTurn, 100);
+                }
                 pickpieceX = null; pickpieceY = null;
                 nextX=[]; nextY=[];
                 Piece_to_Stone(x,y);
@@ -515,6 +532,10 @@ function setting(){
     mainButtons.style.backgroundColor = (colorMode == 1) ? "#2a2a2a" : "transparent";
     resetBoard();
 }
+var gameHistory = [];
+function boardToString(){
+    return board.map(row => row.join("")).join("/");
+}
 
 function startGame(){
     modePanel.hidden = false;
@@ -529,7 +550,9 @@ function closePanel(){
     }, 300);
 }
 function startWithMode(m){
-    rule = m;
+    if(m == 0 || m == 1) rule = 0;
+    else rule = 1;
+    playMode = m % 2;
     closePanel();
     
     container.hidden = false;
@@ -563,3 +586,438 @@ window.rulebook = rulebook;
 window.setting = setting;
 window.startWithMode = startWithMode;
 window.closePanel = closePanel;
+
+/***********************
+  🔥 超強化AIエンジン
+************************/
+
+var MAX_TIME = 1000;
+
+const EXACT = 0;
+const LOWER = 1;
+const UPPER = 2;
+
+var TT = new Map();
+var killerMoves = {};
+var historyHeuristic = {};
+
+// =====================
+// Zobrist Hash
+// =====================
+
+var pieceList = [
+    "K0","Q0","R0","B0","N0","P0",
+    "K1","Q1","R1","B1","N1","P1",
+    "　"
+];
+
+var zobrist = [];
+
+function rand32(){
+    return Math.floor(Math.random() * 4294967296);
+}
+
+for(let y=0;y<h;y++){
+    zobrist[y] = [];
+    for(let x=0;x<w;x++){
+        zobrist[y][x] = {};
+        for(let p of pieceList){
+            zobrist[y][x][p] = rand32();
+        }
+    }
+}
+
+function boardKey(turnColor){
+    let hash = 0;
+    for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+            hash ^= zobrist[y][x][board[y][x]];
+        }
+    }
+    if(turnColor === "1") hash ^= 123456789;
+    return hash;
+}
+
+// =====================
+// attack map
+// =====================
+
+var attacked0 = [];
+var attacked1 = [];
+
+function clearAttackMap(arr){
+    for(let y=0;y<h;y++){
+        arr[y] = [];
+        for(let x=0;x<w;x++){
+            arr[y][x] = false;
+        }
+    }
+}
+
+function buildAttackMap(){
+    clearAttackMap(attacked0);
+    clearAttackMap(attacked1);
+    for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+            let cell = board[y][x];
+            if(cell === "　") continue;
+            let piece = cell[0];
+            let color = cell[1];
+            if(piece === "P") continue;
+            let target = (color === "0") ? attacked0 : attacked1;
+            let dirs = move[piece];
+            for(let d of dirs){
+                let nx = x + d[1];
+                let ny = y + d[0];
+                while(nx>=0 && nx<w && ny>=0 && ny<h){
+                    target[ny][nx] = true;
+                    if(board[ny][nx] !== "　") break;
+                    if(piece === "Q" || piece === "R" || piece === "B"){
+                        nx += d[1];
+                        ny += d[0];
+                    }else{
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =====================
+// evaluate
+// =====================
+
+function evaluateBoard(){
+    buildAttackMap();
+    let score = 0;
+    for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+            let cell = board[y][x];
+            if(cell === "　") continue;
+            let piece = cell[0];
+            let color = cell[1];
+            let value = 0;
+            if(piece === "K") value = 20000;
+            if(piece === "Q") value = 900;
+            if(piece === "R") value = 500;
+            if(piece === "B") value = 330;
+            if(piece === "N") value = 320;
+            if(piece === "P") value = -500;
+            // 中央支配
+            value += (4 - Math.abs(x-2)) * 15;
+            value += (4 - Math.abs(y-2)) * 15;
+            // mobility
+            if(piece !== "P"){
+                value += mobilityBonus(x,y,piece) * 5;
+            }
+            // attacked penalty
+            if(color === "1"){
+                if(attacked0[y][x]) value -= 200;
+                score += value;
+
+            }else{
+                if(attacked1[y][x]) value -= 200;
+                score -= value;
+            }
+        }
+    }
+
+    return score;
+}
+
+function mobilityBonus(x,y,piece){
+    let cnt = 0;
+    let dirs = move[piece];
+    for(let d of dirs){
+        let nx = x + d[1];
+        let ny = y + d[0];
+        while(nx>=0 && nx<w && ny>=0 && ny<h){
+            if(board[ny][nx] !== "　") break;
+            cnt++;
+            if(piece === "Q" || piece === "R" || piece === "B"){
+                nx += d[1];
+                ny += d[0];
+            }else{
+                break;
+            }
+        }
+    }
+    return cnt;
+}
+
+// =====================
+// move generation
+// =====================
+
+function generateAllMoves(color){
+    let moves = [];
+    for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+            let cell = board[y][x];
+            if(cell === "　") continue;
+            if(cell[1] !== color) continue;
+            let piece = cell[0];
+            if(piece === "P") continue;
+            let dirs = move[piece];
+            for(let d of dirs){
+                let nx = x + d[1];
+                let ny = y + d[0];
+                while(nx>=0 && nx<w && ny>=0 && ny<h){
+                    if(board[ny][nx] !== "　") break;
+                    moves.push([x,y,nx,ny]);
+                    if(piece === "Q" || piece === "R" || piece === "B"){
+                        nx += d[1];
+                        ny += d[0];
+                    }else{
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    moves.sort((a,b)=>moveScore(b)-moveScore(a));
+    return moves;
+}
+
+function moveScore(m){
+    let score = 0;
+    score += 20 - (Math.abs(m[2]-2)+Math.abs(m[3]-2));
+    let key = m.join(",");
+    if(historyHeuristic[key]){
+        score += historyHeuristic[key];
+    }
+    return score;
+}
+
+// =====================
+// stone simulation
+// =====================
+
+function stoneEffect(x, y){
+    let changed = [];
+    if(board[y][x] === "　") return changed;
+    let color = board[y][x][1];
+    let dirs = [
+        [-1,-1],[-1,0],[-1,1],
+        [0,-1],[0,1],
+        [1,-1],[1,0],[1,1]
+    ];
+    for(let d of dirs){
+        let dy = d[0];
+        let dx = d[1];
+        let nx = x + dx;
+        let ny = y + dy;
+        if(nx<0 || nx>=w || ny<0 || ny>=h) continue;
+        if(board[ny][nx] === "　") continue;
+        if(board[ny][nx][0] === "P") continue;
+        if(board[ny][nx][1] === color) continue;
+        let cx = nx;
+        let cy = ny;
+        let found = false;
+        while(cx>=0 && cx<w && cy>=0 && cy<h){
+            if(board[cy][cx] === "　") break;
+            if(board[cy][cx][0] === "P") break;
+            if(board[cy][cx][1] === color){
+                found = true;
+                break;
+            }
+            cx += dx;
+            cy += dy;
+        }
+        if(!found) continue;
+        let fx = x + dx;
+        let fy = y + dy;
+        while(fx !== cx || fy !== cy){
+            if(board[fy][fx] !== "　"){
+                changed.push([fx,fy,board[fy][fx]]);
+                board[fy][fx] = "P" + (color === "0" ? "1" : "0");
+            }
+            fx += dx;
+            fy += dy;
+        }
+    }
+    return changed;
+}
+
+function undoStone(changed){
+    for(let c of changed){
+        let x = c[0];
+        let y = c[1];
+        let piece = c[2];
+
+        board[y][x] = piece;
+    }
+}
+
+// =====================
+// make undo
+// =====================
+
+function makeMove(m){
+    let fx = m[0];
+    let fy = m[1];
+    let tx = m[2];
+    let ty = m[3];
+    let captured = board[ty][tx];
+
+    board[ty][tx] = board[fy][fx];
+    board[fy][fx] = "　";
+
+    let changed = stoneEffect(tx,ty);
+
+    return [captured, changed];
+}
+
+function undoMove(m, data){
+    let fx = m[0];
+    let fy = m[1];
+    let tx = m[2];
+    let ty = m[3];
+
+    undoStone(data[1]);
+
+    board[fy][fx] = board[ty][tx];
+    board[ty][tx] = data[0];
+}
+
+// =====================
+// king alive
+// =====================
+
+function isKingAlive(color){
+    for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+            if(board[y][x] === "K"+color){
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// =====================
+// minimax
+// =====================
+
+function minimax(depth, alpha, beta, color){
+    let originalAlpha = alpha;
+    let key = boardKey(color);
+    let entry = TT.get(key);
+    if(entry && entry.depth >= depth){
+        if(entry.flag === EXACT) return entry.value;
+        if(entry.flag === LOWER) alpha = Math.max(alpha, entry.value);
+        if(entry.flag === UPPER) beta = Math.min(beta, entry.value);
+        if(alpha >= beta){
+            return entry.value;
+        }
+    }
+
+    if(depth === 0){
+        return evaluateBoard();
+    }
+    let moves = generateAllMoves(color);
+    if(moves.length === 0){
+        return evaluateBoard();
+    }
+    let best = -Infinity;
+    for(let m of moves){
+        let data = makeMove(m);
+        let nextColor = (color === "0") ? "1" : "0";
+        let score;
+        if(!isKingAlive(nextColor)){
+            score = 999999;
+        }else{
+            score = -minimax(depth-1, -beta, -alpha, nextColor);
+        }
+        undoMove(m, data);
+        if(score > best){
+            best = score;
+        }
+        if(score > alpha){
+            alpha = score;
+            let mk = m.join(",");
+            historyHeuristic[mk] =
+                (historyHeuristic[mk] || 0) + depth * depth;
+        }
+        if(alpha >= beta){
+            if(!killerMoves[depth]){
+                killerMoves[depth] = [];
+            }
+            killerMoves[depth][0] = m;
+            break;
+        }
+    }
+    let flag = EXACT;
+    if(best <= originalAlpha) flag = UPPER;
+    else if(best >= beta) flag = LOWER;
+    TT.set(key, {
+        value: best,
+        depth: depth,
+        flag: flag
+    });
+    return best;
+}
+
+// =====================
+// iterative deepening
+// =====================
+
+function findBestMove(){
+    let startTime = Date.now();
+    let bestMove = null;
+
+    for(let depth=1; depth<=10; depth++){
+
+        let moves = generateAllMoves(aiColor);
+
+        let bestScore = -Infinity;
+
+        for(let m of moves){
+
+            let data = makeMove(m);
+
+            let nextColor = (aiColor === "0") ? "1" : "0";
+
+            let score;
+
+            if(!isKingAlive(nextColor)){
+                score = 999999;
+            }else{
+                score = -minimax(
+                    depth-1,
+                    -Infinity,
+                    Infinity,
+                    nextColor
+                );
+            }
+
+            undoMove(m, data);
+
+            if(score > bestScore){
+                bestScore = score;
+                bestMove = m;
+            }
+
+            if(Date.now() - startTime > MAX_TIME){
+                return bestMove;
+            }
+        }
+    }
+
+    return bestMove;
+}
+
+// =====================
+// ai turn
+// =====================
+
+function aiTurn(){
+    let m = findBestMove();
+    if(!m) return;
+    makeMove(m);
+    turn = (turn + 1) % 2;
+    console.log(turn)
+    gameHistory.push(boardToString());
+    flipText();
+}
