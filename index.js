@@ -349,7 +349,7 @@ function King_Flag(){
 for(var i=0;i<h;i++){
     for(var j=0;j<w;j++){
         if(board[i][j][0]=="K"){
-            if(board[i][k][1]=="0")white=true
+            if(board[i][j][1]=="0")white=true
             else black = true
         }
     }
