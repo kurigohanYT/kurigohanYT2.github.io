@@ -246,8 +246,8 @@ var y = Math.floor((e.clientY - rect.top) / size);
         return;
     }
     if(!CanMove(turn)){ alert((turn==0?"黒":"白")+"の勝ち"); StartGame=false; return; }
-    if(King_Flag()==1){alert("黒の勝ち")}
-    if(King_Flag()==2)alert("白の勝ち")
+    if(King_Flag()==1){alert("黒の勝ち");StartGame=false;return}
+    if(King_Flag()==2){alert("白の勝ち");StartGame=false;return}
                        
     if(piece!="　"){
         nextX=[]; nextY=[]; lastX=x; lastY=y;
@@ -1041,7 +1041,7 @@ function aiTurn(){
     turn = (turn + 1) % 2;
     console.log(turn)
     gameHistory.push(boardToString());
-    if(King_Flag()==1){alert("黒の勝ち")}
-    if(King_Flag()==2)alert("白の勝ち")
+    if(King_Flag()==1){alert("黒の勝ち");StartGame=false;}
+    if(King_Flag()==2){alert("白の勝ち");StartGame=false;}
     flipText();
 }
