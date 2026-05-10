@@ -711,6 +711,9 @@ function buildAttackMap(){
 // =====================
 
 function evaluateBoard(){
+
+    if(!isKingAlive("0")) return 999999;
+    if(!isKingAlive("1")) return -999999;
     buildAttackMap();
     let score = 0;
     for(let y=0;y<h;y++){
@@ -741,6 +744,16 @@ function evaluateBoard(){
             }else{
                 if(attacked1[y][x]) value -= 200;
                 score -= value;
+            }
+            if(piece === "K"){
+                if(color === "1" && attacked0[y][x]){
+                    value -= 5000;
+                    score += value;
+                }
+                if(color === "0" && attacked1[y][x]){
+                    value -= 5000;
+                    score -= value;
+                }
             }
         }
     }
@@ -1001,18 +1014,18 @@ function findBestMove(){
 
             let nextColor = (aiColor === "0") ? "1" : "0";
 
-            let score;
-
+            // 即勝ち
             if(!isKingAlive(nextColor)){
-                score = 999999;
-            }else{
-                score = -minimax(
-                    depth-1,
-                    -Infinity,
-                    Infinity,
-                    nextColor
-                );
+                undoMove(m, data);
+                return m;
             }
+
+            let score = -minimax(
+                depth-1,
+                -Infinity,
+                Infinity,
+                nextColor
+            );
 
             undoMove(m, data);
 
