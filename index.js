@@ -613,6 +613,27 @@ window.closePanel = closePanel;
   🔥 超強化AIエンジン
 ************************/
 
+function pieceCount(color){
+
+    let cnt = 0;
+
+    for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+
+            if(board[y][x]=="　") continue;
+
+            if(board[y][x][1]==color){
+
+                if(board[y][x][0]!="P"){
+                    cnt++;
+                }
+            }
+        }
+    }
+
+    return cnt;
+}
+
 var MAX_TIME = 1000;
 
 const EXACT = 0;
@@ -709,51 +730,181 @@ function buildAttackMap(){
 // =====================
 // evaluate
 // =====================
-
 function evaluateBoard(){
 
-    if(!isKingAlive("0")) return 999999;
-    if(!isKingAlive("1")) return -999999;
+    if(!isKingAlive("0")) return 9999999;
+    if(!isKingAlive("1")) return -9999999;
+
     buildAttackMap();
+
     let score = 0;
+
+    let whiteCount = pieceCount("0");
+    let blackCount = pieceCount("1");
+
+    // 残機超重要
+    score += (blackCount - whiteCount) * 1200;
+
+    // 3体以下は致命的
+    if(blackCount <= 3){
+        score -= 4000;
+    }
+
+    if(whiteCount <= 3){
+        score += 4000;
+    }
+
     for(let y=0;y<h;y++){
         for(let x=0;x<w;x++){
+
             let cell = board[y][x];
-            if(cell === "　") continue;
+
+            if(cell=="　") continue;
+
             let piece = cell[0];
             let color = cell[1];
-            let value = 0;
-            if(piece === "K") value = 20000;
-            if(piece === "Q") value = 900;
-            if(piece === "R") value = 500;
-            if(piece === "B") value = 330;
-            if(piece === "N") value = 320;
-            if(piece === "P") value = -500;
-            // 中央支配
-            value += (4 - Math.abs(x-2)) * 15;
-            value += (4 - Math.abs(y-2)) * 15;
-            // mobility
-            if(piece !== "P"){
-                value += mobilityBonus(x,y,piece) * 5;
-            }
-            // attacked penalty
-            if(color === "1"){
-                if(attacked0[y][x]) value -= 200;
-                score += value;
 
+            let value = 0;
+
+            if(piece=="K") value = 12000;
+            if(piece=="Q") value = 1800;
+            if(piece=="R") value = 1200;
+            if(piece=="B") value = 900;
+            if(piece=="N") value = 850;
+
+            // 石は壁
+            if(piece=="P"){
+                value = 120;
+
+                // 中央石は強い
+                value += (4 - Math.abs(x-2))*25;
+                value += (4 - Math.abs(y-2))*25;
+            }
+
+            // mobility
+            if(piece!="P"){
+                value += mobilityBonus(x,y,piece) * 4;
+            }
+
+            // 中央補正弱め
+            value += (4 - Math.abs(x-2)) * 5;
+            value += (4 - Math.abs(y-2)) * 5;
+
+            // 危険度
+            let danger = dangerAround(x,y,color);
+
+            if(piece=="K"){
+                danger *= 5;
+            }
+
+            // 残機少ない時は超慎重
+            let count = (color=="0") ? whiteCount : blackCount;
+
+            if(count <= 3){
+                danger *= 3;
+            }
+
+            value -= danger;
+
+            // attack map
+            if(color=="1"){
+                if(attacked0[y][x]){
+                    value -= 150;
+                }
             }else{
-                if(attacked1[y][x]) value -= 200;
+                if(attacked1[y][x]){
+                    value -= 150;
+                }
+            }
+
+            // king safety
+            if(piece=="K"){
+                value += kingSafety(x,y,color);
+            }
+
+            if(color=="1"){
+                score += value;
+            }else{
                 score -= value;
             }
-            if(piece === "K"){
-                if(color === "1" && attacked0[y][x]){
-                    value -= 5000;
-                    score += value;
-                }
-                if(color === "0" && attacked1[y][x]){
-                    value -= 5000;
-                    score -= value;
-                }
+        }
+    }
+
+    return score;
+}
+
+function dangerAround(x,y,color){
+
+    let danger = 0;
+
+    let dirs = [
+        [-1,-1],[-1,0],[-1,1],
+        [0,-1],[0,1],
+        [1,-1],[1,0],[1,1]
+    ];
+
+    for(let d of dirs){
+
+        let dy = d[0];
+        let dx = d[1];
+
+        let ax = x + dx;
+        let ay = y + dy;
+
+        let bx = x - dx;
+        let by = y - dy;
+
+        if(ax<0||ax>=w||ay<0||ay>=h) continue;
+        if(bx<0||bx>=w||by>=h||by<0) continue;
+
+        let a = board[ay][ax];
+        let b = board[by][bx];
+
+        // 敵 + 空白
+        if(a!="　" && a[1]!=color && b=="　"){
+            danger += 80;
+        }
+
+        if(b!="　" && b[1]!=color && a=="　"){
+            danger += 80;
+        }
+
+        // 両側敵
+        if(a!="　" && b!="　"){
+            if(a[1]!=color && b[1]!=color){
+                danger += 250;
+            }
+        }
+    }
+
+    return danger;
+}
+
+function kingSafety(x,y,color){
+
+    let score = 0;
+
+    for(let dy=-1;dy<=1;dy++){
+        for(let dx=-1;dx<=1;dx++){
+
+            if(dx==0 && dy==0) continue;
+
+            let nx = x + dx;
+            let ny = y + dy;
+
+            if(nx<0||nx>=w||ny<0||ny>=h){
+                score -= 20;
+                continue;
+            }
+
+            let c = board[ny][nx];
+
+            if(c=="　"){
+                score -= 15;
+            }else if(c[1]==color){
+                score += 20;
+            }else{
+                score -= 35;
             }
         }
     }
@@ -901,7 +1052,7 @@ function makeMove(m){
 
     let changed = stoneEffect(tx,ty);
 
-    return [captured, changed];
+    return [captured, changed, changed.length];
 }
 
 function undoMove(m, data){
@@ -928,6 +1079,36 @@ function isKingAlive(color){
             }
         }
     }
+    return false;
+}
+
+function isLoseByCount(color){
+    return pieceCount(color) <= 2;
+}
+
+function canKillKingNextTurn(color){
+
+    let moves = generateAllMoves(color);
+
+    for(let m of moves){
+
+        let data = makeMove(m);
+
+        let enemy = (color === "0") ? "1" : "0";
+
+        // 相手キング消えた？
+        if(!isKingAlive(enemy)){
+            undoMove(m, data);
+            return true;
+        }
+        if(isLoseByCount(enemy)){
+            undoMove(m, data);
+            return true;
+        }
+
+        undoMove(m, data);
+    }
+
     return false;
 }
 
@@ -960,10 +1141,31 @@ function minimax(depth, alpha, beta, color){
         let data = makeMove(m);
         let nextColor = (color === "0") ? "1" : "0";
         let score;
+        let stoneGain = data[2];
+        score += stoneGain*900;
+        // 即勝ち
         if(!isKingAlive(nextColor)){
-            score = 999999;
+            score = 9999999;
         }else{
-            score = -minimax(depth-1, -beta, -alpha, nextColor);
+            // 相手が次ターンでこちらのキングを倒せる
+            let myCountBefore = pieceCount(aiColor);
+            let myCountAfter = pieceCount(aiColor);
+
+            if(myCountAfter < myCountBefore - 1){
+                undoMove(m,data);
+                continue;
+            }
+            if(canKillKingNextTurn(nextColor)){
+                score = -9999999;
+            }else{
+                score = -minimax(
+                    depth-1,
+                    -beta,
+                    -alpha,
+                    nextColor
+                );
+
+            }
         }
         undoMove(m, data);
         if(score > best){
@@ -1001,25 +1203,22 @@ function minimax(depth, alpha, beta, color){
 function findBestMove(){
     let startTime = Date.now();
     let bestMove = null;
-
     for(let depth=1; depth<=10; depth++){
-
         let moves = generateAllMoves(aiColor);
-
         let bestScore = -Infinity;
-
         for(let m of moves){
-
             let data = makeMove(m);
-
             let nextColor = (aiColor === "0") ? "1" : "0";
-
             // 即勝ち
             if(!isKingAlive(nextColor)){
                 undoMove(m, data);
                 return m;
             }
-
+            // 相手に即殺される手は禁止
+            if(canKillKingNextTurn(nextColor)){
+                undoMove(m, data);
+                continue;
+            }
             let score = -minimax(
                 depth-1,
                 -Infinity,
