@@ -274,9 +274,10 @@ document.getElementById("joinOnlineRoom").addEventListener("click", async () => 
       return;
     }
 
-    const result = await runTransaction(targetPlayersRef, current => {
-      if (!current || !current["0"] || current["0"] === user.uid || current["1"]) return undefined;
-      return { ...current, "1": user.uid };
+    const secondPlayerRef = ref(db, `rooms/${code}/players/1`);
+    const result = await runTransaction(secondPlayerRef, current => {
+      if (current !== null) return undefined;
+      return user.uid;
     }, { applyLocally: false });
     if (!result.committed) {
       status("部屋が見つからないか、すでに満員です。コードを確認してください。");
