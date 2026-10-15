@@ -66,6 +66,13 @@ var selectedPiece = null;
 
 var playMode = 0;// 0:対人戦, 1:コンピューター対戦
 var onlineMode = false;
+var boardFlipped = false;
+
+// Online player 0 sits at the bottom of the board; player 1 uses the default view.
+window.setOnlineBoardOrientation = function(flipped){
+    boardFlipped = Boolean(flipped);
+    document.getElementById("board").classList.toggle("board-flipped", boardFlipped);
+};
 
 // 初期化
 function init(){
@@ -215,6 +222,10 @@ container.onclick=function(e){
 var x = Math.floor((e.clientX - rect.left) / size);
 var y = Math.floor((e.clientY - rect.top) / size);
     if(x<0||x>=w||y<0||y>=h) return;
+    if(boardFlipped){
+        x = w - 1 - x;
+        y = h - 1 - y;
+    }
 
     resetBoard();
 
