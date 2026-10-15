@@ -724,3 +724,8 @@ function applyMove(fx, fy, tx, ty){
     flipText();
 
 }
+
+window.setOnlineBoardOrientation = function(flipped){
+    boardFlipped = Boolean(flipped);
+    document.getElementById("board").classList.toggle("board-flipped", boardFlipped);
+};
