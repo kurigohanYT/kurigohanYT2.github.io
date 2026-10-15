@@ -274,10 +274,14 @@ document.getElementById("joinOnlineRoom").addEventListener("click", async () => 
       return;
     }
 
-    const secondPlayerRef = ref(db, `rooms/${code}/players/1`);
-    const result = await runTransaction(secondPlayerRef, current => {
-      if (current !== null) return undefined;
-      return user.uid;
+    const result = await runTransaction(targetPlayersRef, current => {
+      // A fresh client may initially have no local cache for this node even
+      // though the preceding get() found it on the server. Use that snapshot
+      // as the transaction's first candidate; Firebase will retry against
+      // the server value if the room changed meanwhile.
+      const players = current ?? existingPlayers;
+      if (!players || !players["0"] || players["0"] === user.uid || players["1"]) return undefined;
+      return { ...players, "1": user.uid };
     }, { applyLocally: false });
     if (!result.committed) {
       status("部屋が見つからないか、すでに満員です。コードを確認してください。");
