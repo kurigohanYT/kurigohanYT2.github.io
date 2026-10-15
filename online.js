@@ -13,7 +13,6 @@ import {
 // Firebase web-app settings from the registered "chess" project.
 const firebaseConfig = {
   apiKey: "AIzaSyDD21b53FDPxXfqaSwsKZv3WTlKq7vW3Jg",
-  apiKey: "AIzaSyDD21b53FDPxXfqaSwsKZv3WTLKq7vW3Jg",
   authDomain: "chess-d7c7b.firebaseapp.com",
   databaseURL: "https://chess-d7c7b-default-rtdb.firebaseio.com",
   projectId: "chess-d7c7b",
