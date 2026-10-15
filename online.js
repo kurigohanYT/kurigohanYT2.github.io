@@ -181,6 +181,7 @@ function watchPlayersAsHost() {
 
 window.openOnlineSetup = function () {
   panelEl.hidden = false;
+  setTimeout(() => panelEl.classList.add("show"), 10);
   status("接続しています…");
   currentUser().then(() => status("部屋を作るか、相手のコードを入力してください。"))
     .catch(error => status(`Firebase認証に失敗しました: ${error.message}`));
