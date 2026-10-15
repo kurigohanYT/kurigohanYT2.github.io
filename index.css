@@ -21,6 +21,10 @@
   width: fit-content;
   height: fit-content;
 }
+
+#board.board-flipped {
+  transform: rotate(180deg);
+}
 /* canvasを上に重ねる */
 #can {
   position: absolute;
