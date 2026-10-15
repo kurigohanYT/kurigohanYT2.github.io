@@ -117,6 +117,7 @@ function watchState() {
     if (!matchStarted) {
       window.onlineMode = true;
       window.onlineColor = roomColor;
+      if (window.setOnlineBoardOrientation) window.setOnlineBoardOrientation(roomColor === 0);
       window.playMode = 0;
       window.rule = 0;
       document.getElementById("UI").hidden = true;
@@ -189,6 +190,7 @@ window.openOnlineSetup = function () {
 
 window.leaveOnlineGame = function () {
   stopRoomListeners();
+  if (window.setOnlineBoardOrientation) window.setOnlineBoardOrientation(false);
   roomCode = "";
   roomColor = null;
   roomStateRef = null;
@@ -284,7 +286,7 @@ document.getElementById("joinOnlineRoom").addEventListener("click", async () => 
       return { ...players, "1": user.uid };
     }, { applyLocally: false });
     if (!result.committed) {
-      status("② 参加者の書き込みが拒否されました。Firebaseルールを確認してください。");
+      status("部屋が見つからないか、すでに満員です。コードを確認してください。");
       return;
     }
     prepareRoom(code, 1);
