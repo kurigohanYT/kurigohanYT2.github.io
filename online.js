@@ -284,7 +284,7 @@ document.getElementById("joinOnlineRoom").addEventListener("click", async () => 
       return { ...players, "1": user.uid };
     }, { applyLocally: false });
     if (!result.committed) {
-      status("部屋が見つからないか、すでに満員です。コードを確認してください。");
+      status("② 参加者の書き込みが拒否されました。Firebaseルールを確認してください。");
       return;
     }
     prepareRoom(code, 1);
