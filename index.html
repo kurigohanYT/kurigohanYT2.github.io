@@ -27,6 +27,7 @@
                 <div id="grid"></div>
                 <canvas id="can" style="position:absolute;top:0;left:0;"></canvas>
             </div>
+            <p id="onlineGameStatus" hidden></p>
             <div id="sentaku" style="text-align:center;" hidden="true">
                 <button onclick="choosePiece('Q')"><img src="0_queen.png" alt="Queen"></button>
                 <button onclick="choosePiece('R')"><img src="0_rook.png" alt="Rook"></button>
@@ -37,12 +38,24 @@
     </div>
     <div id="modePanel" class="panel" hidden="true">
         <div class="panelContent">
-            <h3>モード選択</h3>
-            <button onclick="startWithMode(0)">対人戦:公式ルール</button>
-            <button onclick="startWithMode(1)">コンピューター対戦:公式ルール</button>
-            <button onclick="startWithMode(2)">対人戦:ランダム配置</button>
-            <button onclick="startWithMode(3)">コンピューター対戦:ランダム配置</button>
-            <button id = "cansel"onclick="closePanel()">キャンセル</button>
+            <h3 class="mode">モード選択</h3>
+            <button onclick="startWithMode(0)" class="btn" id="rulemode">対人戦:公式ルール</button>
+            <button onclick="startWithMode(1)" class="btn" id="rulemode">コンピューター対戦:公式ルール</button>
+            <button onclick="startWithMode(2)" class="btn" id="rulemode">対人戦:ランダム配置</button>
+            <button onclick="startWithMode(3)" class="btn" id="rulemode">コンピューター対戦:ランダム配置</button>
+            <button onclick="startWithMode(4)" class="btn" id="onlineModeButton">オンライン対戦:公式配置</button>
+            <button id = "cansel"onclick="closePanel()" class="btn">キャンセル</button>
+        </div>
+    </div>
+    <div id="onlinePanel" class="panel" hidden="true">
+        <div class="panelContent">
+            <h3 class="mode">オンライン対戦</h3>
+            <button id="createOnlineRoom" class="btn">部屋を作る</button>
+            <label for="onlineRoomCode">相手の部屋コード</label>
+            <input id="onlineRoomCode" class="onlineRoomCode" maxlength="6" autocomplete="off" placeholder="6文字のコード">
+            <button id="joinOnlineRoom" class="btn">コードで参加</button>
+            <p id="onlineStatus" role="status">Firebaseに接続しています…</p>
+            <button id="closeOnlinePanel" class="btn">戻る</button>
         </div>
     </div>
     <div id="ruleOverlay" hidden>
@@ -61,5 +74,6 @@
     <script src="ai.js"></script>
 
     <script src="index.js"></script>
+    <script type="module" src="online.js"></script>
 </body>
 </html>
