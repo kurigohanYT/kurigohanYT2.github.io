@@ -280,4 +280,3 @@ document.getElementById("closeOnlinePanel").addEventListener("click", () => {
   modePanel.hidden = false;
   setTimeout(() => modePanel.classList.add("show"), 10);
 });
-
