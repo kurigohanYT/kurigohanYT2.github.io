@@ -259,7 +259,22 @@ document.getElementById("joinOnlineRoom").addEventListener("click", async () => 
   }
   try {
     const user = await currentUser();
-    const result = await runTransaction(playersRefFor(code), current => {
+    const targetPlayersRef = playersRefFor(code);
+    // Prime the local cache with the room's current players before starting
+    // the transaction. Otherwise a fresh client can see null locally and
+    // abort the transaction before it has the server value.
+    const existingSnapshot = await get(targetPlayersRef);
+    const existingPlayers = existingSnapshot.val();
+    if (!existingPlayers || !existingPlayers["0"] || existingPlayers["1"]) {
+      status("部屋が見つからないか、すでに満員です。コードを確認してください。");
+      return;
+    }
+    if (existingPlayers["0"] === user.uid) {
+      status("自分が作成した部屋には参加できません。別のブラウザか端末から参加してください。");
+      return;
+    }
+
+    const result = await runTransaction(targetPlayersRef, current => {
       if (!current || !current["0"] || current["0"] === user.uid || current["1"]) return undefined;
       return { ...current, "1": user.uid };
     }, { applyLocally: false });
