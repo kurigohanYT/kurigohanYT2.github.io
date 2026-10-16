@@ -67,6 +67,15 @@ var selectedPiece = null;
 var playMode = 0;// 0:対人戦, 1:コンピューター対戦
 var onlineMode = false;
 var boardFlipped = false;
+window.setGameFinished = function(finished){
+    var backButton = document.getElementById("backToMenuButton");
+    if(backButton) backButton.hidden = !finished;
+};
+
+function endCurrentGame(){
+    StartGame = false;
+    window.setGameFinished(true);
+}
 
 // Online player 0 sits at the bottom of the board; player 1 uses the default view.
 window.setOnlineBoardOrientation = function(flipped){
@@ -76,6 +85,7 @@ window.setOnlineBoardOrientation = function(flipped){
 
 // 初期化
 function init(){
+    window.setGameFinished(false);
     board = [];
     cells = [];
     placing = false;
@@ -315,9 +325,9 @@ var y = Math.floor((e.clientY - rect.top) / size);
         return;
     }
     if(onlineMode && turn !== window.onlineColor) return;
-    if(!CanMove(turn)){ alert((turn==0?"黒":"白")+"の勝ち"); StartGame=false; return; }
-    if(King_Flag()==1){alert("黒の勝ち");StartGame=false;return}
-    if(King_Flag()==2){alert("白の勝ち");StartGame=false;return}
+    if(!CanMove(turn)){ alert((turn==0?"黒":"白")+"の勝ち"); endCurrentGame(); return; }
+    if(King_Flag()==1){alert("黒の勝ち");endCurrentGame();return}
+    if(King_Flag()==2){alert("白の勝ち");endCurrentGame();return}
                        
     if(piece!="　"){
         nextX=[]; nextY=[]; lastX=x; lastY=y;
@@ -348,7 +358,7 @@ var y = Math.floor((e.clientY - rect.top) / size);
                     var winner=turn==0?"黒":"白";
                     if(playMode==1) winner=turn==Number(aiColor)?"プレイヤー":"AI";
                     alert((turn==0?"白":"黒")+"は動けません。"+winner+"の勝ち！");
-                    StartGame=false;
+                    endCurrentGame();
                 }
                 if(StartGame && playMode==1 && turn==Number(aiColor)) setTimeout(aiTurn,100);
                 if(onlineMode && typeof window.publishOnlineState==="function") window.publishOnlineState();
@@ -430,8 +440,8 @@ function twoPiece(){
             }
         }
     }
-    if(one<=2){ alert("白の駒が2個以下になりました。黒の勝ち！"); StartGame=false; }
-    else if(two<=2){ alert("黒の駒が2個以下になりました。白の勝ち！"); StartGame=false; }
+    if(one<=2){ alert("白の駒が2個以下になりました。黒の勝ち！"); endCurrentGame(); }
+    else if(two<=2){ alert("黒の駒が2個以下になりました。白の勝ち！"); endCurrentGame(); }
 }
 
 function King_Flag(){
@@ -487,8 +497,8 @@ function Piece_to_Stone(x, y) {
         }
     }
     var kingResult=King_Flag();
-    if(kingResult==1){ alert("白のキングが石になりました。黒の勝ち！"); StartGame=false; }
-    else if(kingResult==2){ alert("黒のキングが石になりました。白の勝ち！"); StartGame=false; }
+    if(kingResult==1){ alert("白のキングが石になりました。黒の勝ち！"); endCurrentGame(); }
+    else if(kingResult==2){ alert("黒のキングが石になりました。白の勝ち！"); endCurrentGame(); }
     resetBoard();
 }
 
@@ -687,6 +697,22 @@ function startWithMode(m){
     },320);
 }
 
+document.getElementById("backToMenuButton").addEventListener("click", () => {
+    if(window.leaveOnlineGame) window.leaveOnlineGame();
+    onlineMode = false;
+    StartGame = false;
+    container.hidden = true;
+    document.getElementById("UI").hidden = false;
+    window.setGameFinished(false);
+    var modePanelEl = document.getElementById("modePanel");
+    modePanelEl.hidden = true;
+    modePanelEl.classList.remove("show");
+    var onlinePanel = document.getElementById("onlinePanel");
+    onlinePanel.hidden = true;
+    onlinePanel.classList.remove("show");
+    if(window.setOnlineBoardOrientation) window.setOnlineBoardOrientation(false);
+});
+
 startButton.style.backgroundColor = "lightgreen";
 startButton.style.border = "2px solid black";
 startButton.style.borderRadius = "10px";
@@ -722,7 +748,7 @@ function aiTurn(){
 
     if(move == null){
         alert("AIは動けません。あなたの勝ちです！");
-        StartGame=false;
+        endCurrentGame();
         return;
     }
 
@@ -733,7 +759,7 @@ function aiTurn(){
     flipText();
     if(StartGame && !CanMove(turn)){
         alert((turn==0?"白":"黒")+"は動けません。AIの勝ちです！");
-        StartGame=false;
+        endCurrentGame();
         return;
     }
 
