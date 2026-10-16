@@ -369,6 +369,17 @@ body {
   cursor: pointer;
 }
 
+#backToMenuButton {
+  margin: 14px auto 4px;
+  min-width: min(260px, 80vw);
+  background: #e5e5e5;
+  color: #222;
+}
+
+#backToMenuButton[hidden] {
+  display: none;
+}
+
 #rematchOnlineButton[hidden],
 #onlineConnectionStatus[hidden] {
   display: none;
