@@ -349,3 +349,35 @@ body {
   overflow-wrap: anywhere;
   font-weight: bold;
 }
+
+#onlineConnectionStatus {
+  margin: 4px auto;
+  color: #555;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+#rematchOnlineButton {
+  display: block;
+  margin: 12px auto;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 10px;
+  background: #4caf50;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+#rematchOnlineButton[hidden],
+#onlineConnectionStatus[hidden] {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  #onlineGameStatus,
+  #onlineConnectionStatus {
+    max-width: calc(100vw - 24px);
+    font-size: 0.95rem;
+  }
+}
