@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,6 +28,8 @@
                 <canvas id="can" style="position:absolute;top:0;left:0;"></canvas>
             </div>
             <p id="onlineGameStatus" hidden></p>
+            <p id="onlineConnectionStatus" hidden>接続状態を確認しています…</p>
+            <button id="rematchOnlineButton" class="btn" hidden>もう一度対局</button>
             <div id="sentaku" style="text-align:center;" hidden="true">
                 <button onclick="choosePiece('Q')"><img src="0_queen.png" alt="Queen"></button>
                 <button onclick="choosePiece('R')"><img src="0_rook.png" alt="Rook"></button>
@@ -64,14 +66,14 @@
             <div id="ruleContent"></div>
         </div>
     </div>
-    <script src="move.js"></script>
-    <script src="board.js"></script>
-    <script src="moveGenerator.js"></script>
-    <script src="valueModelData.js"></script>
-    <script src="neuralEvaluator.js"></script>
-    <script src="evaluate.js"></script>
-    <script src="search.js"></script>
-    <script src="ai.js"></script>
+    <script src="./AI/move.js"></script>
+    <script src="./AI/board.js"></script>
+    <script src="./AI/moveGenerator.js"></script>
+    <script src="./AI/valueModelData.js"></script>
+    <script src="./AI/neuralEvaluator.js"></script>
+    <script src="./AI/evaluate.js"></script>
+    <script src="./AI/search.js"></script>
+    <script src="./AI/ai.js"></script>
 
     <script src="index.js"></script>
     <script type="module" src="online.js"></script>
