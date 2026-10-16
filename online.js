@@ -7,6 +7,7 @@ import {
   set,
   runTransaction,
   onValue,
+  onDisconnect,
   off
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
 
@@ -34,6 +35,14 @@ let lastRevision = -1;
 let stateWatchStarted = false;
 let matchStarted = false;
 let lastFinishedRevision = -1;
+let ownPresenceRef = null;
+let opponentPresenceRef = null;
+let presenceConnectionRef = null;
+let opponentPresenceListener = null;
+let presenceConnectionListener = null;
+let opponentDisconnected = false;
+let latestStatusMessage = "";
+let lastOpponentPresenceSnapshot = null;
 
 const statusEl = document.getElementById("onlineStatus");
 const codeEl = document.getElementById("onlineRoomCode");
@@ -49,9 +58,72 @@ onValue(ref(db, ".info/connected"), snapshot => {
 });
 
 function status(message) {
+  latestStatusMessage = message;
   if (statusEl) statusEl.textContent = message;
   const gameStatus = document.getElementById("onlineGameStatus");
-  if (gameStatus) gameStatus.textContent = message;
+  if (gameStatus) gameStatus.textContent = opponentDisconnected
+    ? "相手の接続が切れました。再接続を待っています…"
+    : message;
+}
+
+function stopPresenceTracking(markOffline = false) {
+  if (opponentPresenceRef && opponentPresenceListener) {
+    off(opponentPresenceRef, "value", opponentPresenceListener);
+  }
+  if (presenceConnectionRef && presenceConnectionListener) {
+    off(presenceConnectionRef, "value", presenceConnectionListener);
+  }
+  const previousOwnPresenceRef = ownPresenceRef;
+  if (markOffline && previousOwnPresenceRef) {
+    set(previousOwnPresenceRef, false)
+      .then(() => onDisconnect(previousOwnPresenceRef).cancel())
+      .catch(() => {});
+  }
+  ownPresenceRef = null;
+  opponentPresenceRef = null;
+  presenceConnectionRef = null;
+  opponentPresenceListener = null;
+  presenceConnectionListener = null;
+  opponentDisconnected = false;
+}
+
+function startPresenceTracking() {
+  stopPresenceTracking(true);
+  if (!roomCode || roomColor === null) return;
+  lastOpponentPresenceSnapshot = null;
+
+  ownPresenceRef = ref(db, `rooms/${roomCode}/presence/${roomColor}`);
+  const opponentColor = 1 - roomColor;
+  opponentPresenceRef = ref(db, `rooms/${roomCode}/presence/${opponentColor}`);
+  presenceConnectionRef = ref(db, ".info/connected");
+
+  opponentPresenceListener = onValue(opponentPresenceRef, snapshot => {
+    lastOpponentPresenceSnapshot = snapshot;
+    updateOpponentPresenceMessage();
+  }, error => status(`相手の接続状態を確認できません: ${error.message}`));
+
+  presenceConnectionListener = onValue(presenceConnectionRef, async snapshot => {
+    if (snapshot.val() !== true || !ownPresenceRef) return;
+    try {
+      // Queue the server-side disconnect action before advertising this client as online.
+      await onDisconnect(ownPresenceRef).set(false);
+      await set(ownPresenceRef, true);
+    } catch (error) {
+      status(`退出通知を設定できません: ${error.message}`);
+    }
+  });
+}
+
+function updateOpponentPresenceMessage() {
+  if (!matchStarted || !lastOpponentPresenceSnapshot || !lastOpponentPresenceSnapshot.exists()) return;
+  const gameStatus = document.getElementById("onlineGameStatus");
+  if (lastOpponentPresenceSnapshot.val() === true) {
+    opponentDisconnected = false;
+    if (gameStatus) gameStatus.textContent = latestStatusMessage;
+  } else {
+    opponentDisconnected = true;
+    if (gameStatus) gameStatus.textContent = "相手の接続が切れました。再接続を待っています…";
+  }
 }
 
 async function currentUser() {
@@ -154,6 +226,7 @@ function watchState() {
     status(data.finished
       ? `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${Number(data.turn) === roomColor ? "もう一度対局できます" : "相手の再戦開始を待っています"}`
       : `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${window.turn === roomColor ? "あなたの手番" : "相手の手番"}`);
+    updateOpponentPresenceMessage();
     if (rematchButton) rematchButton.hidden = !data.finished || Number(data.turn) !== roomColor;
 
     if (data.finished && lastFinishedRevision !== revision) {
@@ -206,6 +279,7 @@ window.openOnlineSetup = function () {
 
 window.leaveOnlineGame = function () {
   stopRoomListeners();
+  stopPresenceTracking(true);
   if (window.setOnlineBoardOrientation) window.setOnlineBoardOrientation(false);
   roomCode = "";
   roomColor = null;
@@ -284,6 +358,7 @@ document.getElementById("createOnlineRoom").addEventListener("click", async () =
       );
       if (!result.committed) continue;
       prepareRoom(code, 0);
+      startPresenceTracking();
       status(`部屋コード ${code} を相手に伝えてください。参加待ちです…`);
       watchPlayersAsHost();
       return;
@@ -331,6 +406,7 @@ document.getElementById("joinOnlineRoom").addEventListener("click", async () => 
       return;
     }
     prepareRoom(code, 1);
+    startPresenceTracking();
     status("部屋に参加しました。相手が対局を開始するまでお待ちください…");
     watchState();
   } catch (error) {
