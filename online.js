@@ -41,6 +41,7 @@ let presenceConnectionRef = null;
 let opponentPresenceListener = null;
 let presenceConnectionListener = null;
 let opponentDisconnected = false;
+let opponentPresenceMissing = false;
 let latestStatusMessage = "";
 let lastOpponentPresenceSnapshot = null;
 
@@ -63,7 +64,9 @@ function status(message) {
   const gameStatus = document.getElementById("onlineGameStatus");
   if (gameStatus) gameStatus.textContent = opponentDisconnected
     ? "相手の接続が切れました。再接続を待っています…"
-    : message;
+    : opponentPresenceMissing
+      ? "相手の接続情報がありません。相手側もページを更新して、新しい部屋で接続してください。"
+      : message;
 }
 
 function stopPresenceTracking(markOffline = false) {
@@ -85,6 +88,7 @@ function stopPresenceTracking(markOffline = false) {
   opponentPresenceListener = null;
   presenceConnectionListener = null;
   opponentDisconnected = false;
+  opponentPresenceMissing = false;
 }
 
 function startPresenceTracking() {
@@ -115,13 +119,21 @@ function startPresenceTracking() {
 }
 
 function updateOpponentPresenceMessage() {
-  if (!matchStarted || !lastOpponentPresenceSnapshot || !lastOpponentPresenceSnapshot.exists()) return;
+  if (!matchStarted) return;
   const gameStatus = document.getElementById("onlineGameStatus");
+  if (!lastOpponentPresenceSnapshot || !lastOpponentPresenceSnapshot.exists()) {
+    opponentDisconnected = false;
+    opponentPresenceMissing = true;
+    if (gameStatus) gameStatus.textContent = "相手の接続情報がありません。相手側もページを更新して、新しい部屋で接続してください。";
+    return;
+  }
   if (lastOpponentPresenceSnapshot.val() === true) {
     opponentDisconnected = false;
+    opponentPresenceMissing = false;
     if (gameStatus) gameStatus.textContent = latestStatusMessage;
   } else {
     opponentDisconnected = true;
+    opponentPresenceMissing = false;
     if (gameStatus) gameStatus.textContent = "相手の接続が切れました。再接続を待っています…";
   }
 }
