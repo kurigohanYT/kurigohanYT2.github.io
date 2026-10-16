@@ -171,8 +171,8 @@ function applyForfeit(winner) {
   forfeitWritePending = false;
   currentMatchFinished = true;
   forfeitStatusMessage = winner === roomColor
-    ? `相手が切断したため、あなたの不戦勝です（${roomColor === 0 ? "白" : "黒"}）。`
-    : "相手の不戦勝です。対局を終了しました。";
+    ? `相手が切断したため、あなたの勝ちです（${roomColor === 0 ? "白" : "黒"}）。`
+    : "相手が勝ちました。対局を終了しました。";
   window.StartGame = false;
   if (window.setGameFinished) window.setGameFinished(true);
   if (rematchButton) rematchButton.hidden = true;
