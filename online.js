@@ -148,6 +148,7 @@ function watchState() {
     );
     window.turn = Number(data.turn || 0);
     window.StartGame = !data.finished;
+    if (window.setGameFinished) window.setGameFinished(Boolean(data.finished));
     window.resetBoard();
     window.flipText();
     status(data.finished
