@@ -214,6 +214,39 @@ function resetBoard(){
         }
     }
 }
+// Keep the board and its pieces within the visible area when the window
+// size changes (for example, when a phone rotates).
+function resizeBoard(){
+    var availableWidth = Math.max(160, window.innerWidth - margin);
+    var availableHeight = Math.max(160, window.innerHeight - 220);
+    var nextSize = Math.max(24, Math.floor(Math.min(availableWidth, availableHeight) / w));
+    if(nextSize === size) return;
+    size = nextSize;
+    can.width = size * w;
+    can.height = size * h;
+    grid.style.width = can.width + "px";
+    grid.style.height = can.height + "px";
+    button.style.width = can.width + "px";
+    for(var y=0; y<cells.length; y++){
+        for(var x=0; x<cells[y].length; x++){
+            var cell = cells[y][x];
+            cell.style.width = size + "px";
+            cell.style.height = size + "px";
+            cell.style.maxHeight = size + "px";
+            cell.style.left = (x * size) + "px";
+            cell.style.top = (y * size) + "px";
+        }
+    }
+    if(cells.length) resetBoard();
+    else {
+        for(var row=0; row<h; row++) for(var col=0; col<w; col++){
+            ctx.fillStyle = (row+col)%2===0 ? colorSets[colorMode][0] : colorSets[colorMode][1];
+            ctx.fillRect(col*size, row*size, size, size);
+            ctx.strokeRect(col*size, row*size, size, size);
+        }
+    }
+}
+window.addEventListener("resize", resizeBoard);
 var pickpieceX = null;
 var pickpieceY = null;
 // クリック処理
@@ -724,8 +757,3 @@ function applyMove(fx, fy, tx, ty){
     flipText();
 
 }
-
-window.setOnlineBoardOrientation = function(flipped){
-    boardFlipped = Boolean(flipped);
-    document.getElementById("board").classList.toggle("board-flipped", boardFlipped);
-};
