@@ -38,6 +38,15 @@ let lastFinishedRevision = -1;
 const statusEl = document.getElementById("onlineStatus");
 const codeEl = document.getElementById("onlineRoomCode");
 const panelEl = document.getElementById("onlinePanel");
+const connectionStatusEl = document.getElementById("onlineConnectionStatus");
+const rematchButton = document.getElementById("rematchOnlineButton");
+
+onValue(ref(db, ".info/connected"), snapshot => {
+  if (!connectionStatusEl) return;
+  connectionStatusEl.textContent = snapshot.val() === true
+    ? "Firebaseに接続中"
+    : "Firebaseに接続できません。通信を確認してください。";
+});
 
 function status(message) {
   if (statusEl) statusEl.textContent = message;
@@ -123,6 +132,8 @@ function watchState() {
       document.getElementById("UI").hidden = true;
       document.getElementById("container").hidden = false;
       document.getElementById("onlineGameStatus").hidden = false;
+      if (connectionStatusEl) connectionStatusEl.hidden = false;
+      if (rematchButton) rematchButton.hidden = true;
       panelEl.hidden = true;
       document.getElementById("modePanel").hidden = true;
       window.init();
@@ -139,7 +150,10 @@ function watchState() {
     window.StartGame = !data.finished;
     window.resetBoard();
     window.flipText();
-    status(`部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${window.turn === roomColor ? "あなたの手番" : "相手の手番"}`);
+    status(data.finished
+      ? `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${Number(data.turn) === roomColor ? "もう一度対局できます" : "相手の再戦開始を待っています"}`
+      : `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${window.turn === roomColor ? "あなたの手番" : "相手の手番"}`);
+    if (rematchButton) rematchButton.hidden = !data.finished || Number(data.turn) !== roomColor;
 
     if (data.finished && lastFinishedRevision !== revision) {
       lastFinishedRevision = revision;
@@ -182,6 +196,7 @@ function watchPlayersAsHost() {
 
 window.openOnlineSetup = function () {
   panelEl.hidden = false;
+  if (connectionStatusEl) connectionStatusEl.hidden = false;
   setTimeout(() => panelEl.classList.add("show"), 10);
   status("接続しています…");
   currentUser().then(() => status("部屋を作るか、相手のコードを入力してください。"))
@@ -199,7 +214,32 @@ window.leaveOnlineGame = function () {
   window.onlineColor = null;
   window.onlineRoomCode = "";
   document.getElementById("onlineGameStatus").hidden = true;
+  if (connectionStatusEl) connectionStatusEl.hidden = true;
+  if (rematchButton) rematchButton.hidden = true;
 };
+
+if (rematchButton) rematchButton.addEventListener("click", async () => {
+  if (!roomStateRef || roomColor === null) return;
+  rematchButton.disabled = true;
+  status("再戦を準備しています…");
+  try {
+    const result = await runTransaction(roomStateRef, current => {
+      if (!current || !current.finished || Number(current.turn) !== roomColor) return;
+      return {
+        board: standardBoard(),
+        turn: 1 - Number(current.turn),
+        revision: Number(current.revision || 0) + 1,
+        finished: false,
+        winner: -1
+      };
+    }, { applyLocally: false });
+    if (!result.committed) status("相手が先に再戦を始めたか、再戦できない状態です。");
+  } catch (error) {
+    status(`再戦を開始できませんでした: ${error.message}`);
+  } finally {
+    rematchButton.disabled = false;
+  }
+});
 
 window.publishOnlineState = async function () {
   if (!window.onlineMode || !roomStateRef || roomColor !== 1 - window.turn) return;
