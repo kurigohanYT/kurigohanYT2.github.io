@@ -31,6 +31,8 @@ let roomColor = null;
 let roomStateRef = null;
 let playersListener = null;
 let stateListener = null;
+let forfeitRef = null;
+let forfeitListener = null;
 let lastRevision = -1;
 let stateWatchStarted = false;
 let matchStarted = false;
@@ -42,6 +44,10 @@ let opponentPresenceListener = null;
 let presenceConnectionListener = null;
 let opponentDisconnected = false;
 let opponentPresenceMissing = false;
+let forfeitDeclared = false;
+let forfeitWritePending = false;
+let forfeitStatusMessage = "";
+let currentMatchFinished = false;
 let latestStatusMessage = "";
 let lastOpponentPresenceSnapshot = null;
 
@@ -60,10 +66,12 @@ onValue(ref(db, ".info/connected"), snapshot => {
 
 function status(message) {
   latestStatusMessage = message;
-  if (statusEl) statusEl.textContent = message;
+  if (statusEl) statusEl.textContent = forfeitDeclared ? forfeitStatusMessage : message;
   const gameStatus = document.getElementById("onlineGameStatus");
-  if (gameStatus) gameStatus.textContent = opponentDisconnected
-    ? "相手の接続が切れました。再接続を待っています…"
+  if (gameStatus) gameStatus.textContent = forfeitDeclared
+    ? forfeitStatusMessage
+    : opponentDisconnected
+      ? "相手の接続が切れました。判定しています…"
     : opponentPresenceMissing
       ? "相手の接続情報がありません。相手側もページを更新して、新しい部屋で接続してください。"
       : message;
@@ -89,6 +97,10 @@ function stopPresenceTracking(markOffline = false) {
   presenceConnectionListener = null;
   opponentDisconnected = false;
   opponentPresenceMissing = false;
+  forfeitDeclared = false;
+  forfeitWritePending = false;
+  forfeitStatusMessage = "";
+  currentMatchFinished = false;
 }
 
 function startPresenceTracking() {
@@ -121,6 +133,13 @@ function startPresenceTracking() {
 function updateOpponentPresenceMessage() {
   if (!matchStarted) return;
   const gameStatus = document.getElementById("onlineGameStatus");
+  if (forfeitDeclared) {
+    window.StartGame = false;
+    if (window.setGameFinished) window.setGameFinished(true);
+    if (gameStatus) gameStatus.textContent = forfeitStatusMessage;
+    return;
+  }
+  if (currentMatchFinished) return;
   if (!lastOpponentPresenceSnapshot || !lastOpponentPresenceSnapshot.exists()) {
     opponentDisconnected = false;
     opponentPresenceMissing = true;
@@ -130,12 +149,36 @@ function updateOpponentPresenceMessage() {
   if (lastOpponentPresenceSnapshot.val() === true) {
     opponentDisconnected = false;
     opponentPresenceMissing = false;
-    if (gameStatus) gameStatus.textContent = latestStatusMessage;
+    if (gameStatus) gameStatus.textContent = forfeitDeclared ? forfeitStatusMessage : latestStatusMessage;
   } else {
     opponentDisconnected = true;
     opponentPresenceMissing = false;
-    if (gameStatus) gameStatus.textContent = "相手の接続が切れました。再接続を待っています…";
+    if (!forfeitDeclared && !forfeitWritePending) {
+      forfeitWritePending = true;
+      set(forfeitRef, roomColor).catch(error => {
+        forfeitWritePending = false;
+        applyForfeit(roomColor);
+        forfeitStatusMessage += `（Firebaseへの結果保存に失敗: ${error.message}）`;
+        status(forfeitStatusMessage);
+      });
+    }
   }
+}
+
+function applyForfeit(winner) {
+  if (winner !== 0 && winner !== 1) return;
+  forfeitDeclared = true;
+  forfeitWritePending = false;
+  currentMatchFinished = true;
+  forfeitStatusMessage = winner === roomColor
+    ? `相手が切断したため、あなたの不戦勝です（${roomColor === 0 ? "白" : "黒"}）。`
+    : "相手の不戦勝です。対局を終了しました。";
+  window.StartGame = false;
+  if (window.setGameFinished) window.setGameFinished(true);
+  if (rematchButton) rematchButton.hidden = true;
+  if (statusEl) statusEl.textContent = forfeitStatusMessage;
+  const gameStatus = document.getElementById("onlineGameStatus");
+  if (gameStatus) gameStatus.textContent = forfeitStatusMessage;
 }
 
 async function currentUser() {
@@ -172,8 +215,10 @@ function standardBoard() {
 function stopRoomListeners() {
   if (roomCode && playersListener) off(playersRefFor(roomCode), "value", playersListener);
   if (roomStateRef && stateListener) off(roomStateRef, "value", stateListener);
+  if (forfeitRef && forfeitListener) off(forfeitRef, "value", forfeitListener);
   playersListener = null;
   stateListener = null;
+  forfeitListener = null;
 }
 
 function prepareRoom(code, color) {
@@ -181,6 +226,7 @@ function prepareRoom(code, color) {
   roomCode = code;
   roomColor = color;
   roomStateRef = stateRefFor(code);
+  forfeitRef = ref(db, `rooms/${code}/forfeit`);
   stateWatchStarted = false;
   matchStarted = false;
   lastRevision = -1;
@@ -222,6 +268,9 @@ function watchState() {
       document.getElementById("modePanel").hidden = true;
       window.init();
       matchStarted = true;
+      forfeitListener = onValue(forfeitRef, snapshot => {
+        if (snapshot.exists()) applyForfeit(Number(snapshot.val()));
+      }, error => status(`不戦勝の結果を読み取れません: ${error.message}`));
     }
 
     window.board = Array.from({ length: 5 }, (_, y) =>
@@ -232,6 +281,7 @@ function watchState() {
     );
     window.turn = Number(data.turn || 0);
     window.StartGame = !data.finished;
+    currentMatchFinished = Boolean(data.finished);
     if (window.setGameFinished) window.setGameFinished(Boolean(data.finished));
     window.resetBoard();
     window.flipText();
