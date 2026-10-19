@@ -33,6 +33,8 @@ let playersListener = null;
 let stateListener = null;
 let forfeitRef = null;
 let forfeitListener = null;
+let rematchRef = null;
+let rematchListener = null;
 let lastRevision = -1;
 let stateWatchStarted = false;
 let matchStarted = false;
@@ -56,6 +58,11 @@ const codeEl = document.getElementById("onlineRoomCode");
 const panelEl = document.getElementById("onlinePanel");
 const connectionStatusEl = document.getElementById("onlineConnectionStatus");
 const rematchButton = document.getElementById("rematchOnlineButton");
+const rematchDecision = document.getElementById("rematchDecision");
+const acceptRematchButton = document.getElementById("acceptRematchOnlineButton");
+const declineRematchButton = document.getElementById("declineRematchOnlineButton");
+let latestRoomState = null;
+let latestRematch = null;
 
 onValue(ref(db, ".info/connected"), snapshot => {
   if (!connectionStatusEl) return;
@@ -216,9 +223,11 @@ function stopRoomListeners() {
   if (roomCode && playersListener) off(playersRefFor(roomCode), "value", playersListener);
   if (roomStateRef && stateListener) off(roomStateRef, "value", stateListener);
   if (forfeitRef && forfeitListener) off(forfeitRef, "value", forfeitListener);
+  if (rematchRef && rematchListener) off(rematchRef, "value", rematchListener);
   playersListener = null;
   stateListener = null;
   forfeitListener = null;
+  rematchListener = null;
 }
 
 function prepareRoom(code, color) {
@@ -227,6 +236,9 @@ function prepareRoom(code, color) {
   roomColor = color;
   roomStateRef = stateRefFor(code);
   forfeitRef = ref(db, `rooms/${code}/forfeit`);
+  rematchRef = ref(db, `rooms/${code}/rematch`);
+  latestRoomState = null;
+  latestRematch = null;
   stateWatchStarted = false;
   matchStarted = false;
   lastRevision = -1;
@@ -245,6 +257,7 @@ function watchState() {
     }
 
     const data = snapshot.val();
+    latestRoomState = data;
     if (!Array.isArray(data.board) && (!data.board || typeof data.board !== "object")) {
       status("部屋データを読み取れません。新しい部屋を作ってください。");
       return;
@@ -271,6 +284,13 @@ function watchState() {
       forfeitListener = onValue(forfeitRef, snapshot => {
         if (snapshot.exists()) applyForfeit(Number(snapshot.val()));
       }, error => status(`不戦勝の結果を読み取れません: ${error.message}`));
+      rematchListener = onValue(rematchRef, snapshot => {
+        latestRematch = snapshot.val();
+        updateRematchControls();
+        if (latestRematch && latestRematch.status === "rejected" && Number(latestRematch.from) === roomColor) {
+          status("相手は再戦を断りました。対局結果に戻りました。");
+        }
+      }, error => status(`再戦の申し込みを確認できません: ${error.message}`));
     }
 
     window.board = Array.from({ length: 5 }, (_, y) =>
@@ -286,10 +306,10 @@ function watchState() {
     window.resetBoard();
     window.flipText();
     status(data.finished
-      ? `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${Number(data.turn) === roomColor ? "もう一度対局できます" : "相手の再戦開始を待っています"}`
+      ? `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${Number(data.winner) === roomColor ? "あなたの勝ちです" : "相手の勝ちです"}`
       : `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${window.turn === roomColor ? "あなたの手番" : "相手の手番"}`);
     updateOpponentPresenceMessage();
-    if (rematchButton) rematchButton.hidden = !data.finished || Number(data.turn) !== roomColor;
+    updateRematchControls();
 
     if (data.finished && lastFinishedRevision !== revision) {
       lastFinishedRevision = revision;
@@ -297,6 +317,23 @@ function watchState() {
       setTimeout(() => alert(message), 0);
     }
   }, error => status(`通信エラー: ${error.message}`));
+}
+
+function updateRematchControls() {
+  if (!rematchButton || !latestRoomState) return;
+  const finished = Boolean(latestRoomState.finished) && !forfeitDeclared;
+  const pending = latestRematch && latestRematch.status === "pending";
+  const ownRequestPending = pending && Number(latestRematch.from) === roomColor;
+  const opponentRequestPending = pending && Number(latestRematch.from) !== roomColor;
+  const isWinner = Number(latestRoomState.winner) === roomColor;
+  rematchButton.hidden = !finished || isWinner || Boolean(opponentRequestPending);
+  rematchButton.disabled = Boolean(ownRequestPending);
+  rematchButton.textContent = ownRequestPending
+    ? "再戦の返事を待っています…"
+    : latestRematch && latestRematch.status === "rejected"
+      ? "もう一度申し込む"
+      : "再戦を申し込む";
+  if (rematchDecision) rematchDecision.hidden = !finished || !isWinner || !opponentRequestPending;
 }
 
 async function startHostMatch() {
@@ -356,12 +393,35 @@ window.leaveOnlineGame = function () {
 };
 
 if (rematchButton) rematchButton.addEventListener("click", async () => {
-  if (!roomStateRef || roomColor === null) return;
+  if (!roomStateRef || !rematchRef || roomColor === null || !latestRoomState || Number(latestRoomState.winner) === roomColor) return;
   rematchButton.disabled = true;
-  status("再戦を準備しています…");
+  status("再戦を申し込んでいます…");
   try {
-    const result = await runTransaction(roomStateRef, current => {
-      if (!current || !current.finished || Number(current.turn) !== roomColor) return;
+    const result = await runTransaction(rematchRef, current => {
+      if (!latestRoomState.finished || Number(latestRoomState.winner) === roomColor || (current && current.status === "pending")) return;
+      return { status: "pending", from: roomColor, requestedAt: Date.now() };
+    }, { applyLocally: false });
+    if (!result.committed) status("再戦を申し込めませんでした。対局の状態を確認してください。");
+    else status("再戦を申し込みました。勝者の返事を待っています…");
+  } catch (error) {
+    status(`再戦を申し込めませんでした: ${error.message}`);
+  } finally {
+    updateRematchControls();
+  }
+});
+
+if (acceptRematchButton) acceptRematchButton.addEventListener("click", async () => {
+  if (!rematchRef || !roomStateRef || !latestRoomState || !latestRematch || latestRematch.status !== "pending") return;
+  acceptRematchButton.disabled = true;
+  declineRematchButton.disabled = true;
+  try {
+    const response = await runTransaction(rematchRef, current => {
+      if (!current || current.status !== "pending" || Number(current.from) === roomColor || Number(latestRoomState.winner) !== roomColor) return;
+      return { ...current, status: "accepted", decidedAt: Date.now() };
+    }, { applyLocally: false });
+    if (!response.committed) throw new Error("申し込みはすでに取り消されたか、処理済みです。");
+    const restart = await runTransaction(roomStateRef, current => {
+      if (!current || !current.finished || Number(current.winner) !== roomColor) return;
       return {
         board: standardBoard(),
         turn: 1 - Number(current.turn),
@@ -370,11 +430,32 @@ if (rematchButton) rematchButton.addEventListener("click", async () => {
         winner: -1
       };
     }, { applyLocally: false });
-    if (!result.committed) status("相手が先に再戦を始めたか、再戦できない状態です。");
+    if (!restart.committed) throw new Error("盤面を再開できませんでした。ページを更新して状態を確認してください。");
+    status("再戦を開始します！");
   } catch (error) {
     status(`再戦を開始できませんでした: ${error.message}`);
   } finally {
-    rematchButton.disabled = false;
+    acceptRematchButton.disabled = false;
+    declineRematchButton.disabled = false;
+  }
+});
+
+if (declineRematchButton) declineRematchButton.addEventListener("click", async () => {
+  if (!rematchRef || !latestRoomState || !latestRematch || latestRematch.status !== "pending") return;
+  acceptRematchButton.disabled = true;
+  declineRematchButton.disabled = true;
+  try {
+    const result = await runTransaction(rematchRef, current => {
+      if (!current || current.status !== "pending" || Number(current.from) === roomColor || Number(latestRoomState.winner) !== roomColor) return;
+      return { ...current, status: "rejected", decidedAt: Date.now() };
+    }, { applyLocally: false });
+    status(result.committed ? "再戦の申し込みを断りました。" : "申し込みはすでに処理されています。");
+  } catch (error) {
+    status(`申し込みを断れませんでした: ${error.message}`);
+  } finally {
+    acceptRematchButton.disabled = false;
+    declineRematchButton.disabled = false;
+    updateRematchControls();
   }
 });
 
