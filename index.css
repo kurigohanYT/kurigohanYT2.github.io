@@ -350,6 +350,14 @@ body {
   font-weight: bold;
 }
 
+#onlineClock {
+  margin: 6px auto;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+
 #onlineConnectionStatus {
   margin: 4px auto;
   color: #555;
@@ -413,6 +421,7 @@ body {
 
 @media (max-width: 600px) {
   #onlineGameStatus,
+  #onlineClock,
   #onlineConnectionStatus {
     max-width: calc(100vw - 24px);
     font-size: 0.95rem;
