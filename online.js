@@ -63,12 +63,23 @@ const acceptRematchButton = document.getElementById("acceptRematchOnlineButton")
 const declineRematchButton = document.getElementById("declineRematchOnlineButton");
 let latestRoomState = null;
 let latestRematch = null;
+const INITIAL_CLOCK_MS = 2 * 60 * 1000;
+let clockInterval = null;
+let serverTimeOffset = 0;
+let timeoutClaimPending = false;
+let fallbackTurnStartedAt = null;
+const clockEl = document.getElementById("onlineClock");
 
 onValue(ref(db, ".info/connected"), snapshot => {
   if (!connectionStatusEl) return;
   connectionStatusEl.textContent = snapshot.val() === true
     ? "Firebaseに接続中"
     : "Firebaseに接続できません。通信を確認してください。";
+});
+
+onValue(ref(db, ".info/serverTimeOffset"), snapshot => {
+  serverTimeOffset = Number(snapshot.val()) || 0;
+  renderOnlineClock();
 });
 
 function status(message) {
@@ -82,6 +93,83 @@ function status(message) {
     : opponentPresenceMissing
       ? "相手の接続情報がありません。相手側もページを更新して、新しい部屋で接続してください。"
       : message;
+}
+
+function correctedNow() {
+  return Date.now() + serverTimeOffset;
+}
+
+function clockValues(state = latestRoomState) {
+  const source = state && state.clocks;
+  return [0, 1].map(color => {
+    const value = source && source[color] !== undefined ? Number(source[color]) : INITIAL_CLOCK_MS;
+    return Number.isFinite(value) ? Math.max(0, value) : INITIAL_CLOCK_MS;
+  });
+}
+
+function remainingClock(color, state = latestRoomState) {
+  const clocks = clockValues(state);
+  if (!state || state.finished || Number(state.turn) !== color) return clocks[color];
+  const startedAt = Number(state.turnStartedAt) || fallbackTurnStartedAt || correctedNow();
+  return Math.max(0, clocks[color] - Math.max(0, correctedNow() - startedAt));
+}
+
+function formatClock(milliseconds) {
+  const seconds = Math.ceil(milliseconds / 1000);
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function renderOnlineClock() {
+  if (!clockEl) return;
+  const visible = matchStarted && Boolean(latestRoomState);
+  clockEl.hidden = !visible;
+  if (!visible) return;
+  const active = latestRoomState.finished || currentMatchFinished ? -1 : Number(latestRoomState.turn);
+  const times = [0, 1].map(color => {
+    const label = color === 0 ? "白" : "黒";
+    const marker = active === color ? "▶ " : "";
+    return `${marker}${label} ${formatClock(remainingClock(color))}`;
+  });
+  clockEl.textContent = `${times[0]}　／　${times[1]}`;
+}
+
+async function claimTimeForfeit() {
+  if (timeoutClaimPending || forfeitDeclared || currentMatchFinished || !roomStateRef || !latestRoomState || latestRoomState.finished || Number(latestRoomState.turn) !== roomColor) return;
+  timeoutClaimPending = true;
+  try {
+    const result = await runTransaction(roomStateRef, current => {
+      if (!current || current.finished || Number(current.turn) !== roomColor) return;
+      const clocks = clockValues(current);
+      const startedAt = Number(current.turnStartedAt) || fallbackTurnStartedAt || correctedNow();
+      if (correctedNow() - startedAt < clocks[roomColor]) return;
+      clocks[roomColor] = 0;
+      return {
+        ...current,
+        turn: 1 - roomColor,
+        clocks,
+        turnStartedAt: correctedNow(),
+        revision: Number(current.revision || 0) + 1,
+        finished: true,
+        winner: 1 - roomColor
+      };
+    }, { applyLocally: false });
+    if (result.committed) status(roomColor === 0 ? "白の持ち時間が切れました。黒の勝ちです。" : "黒の持ち時間が切れました。白の勝ちです。");
+  } catch (error) {
+    status(`時間切れの結果を送信できませんでした: ${error.message}`);
+  } finally {
+    timeoutClaimPending = false;
+    renderOnlineClock();
+  }
+}
+
+function startClockUpdates() {
+  if (clockInterval) clearInterval(clockInterval);
+  clockInterval = setInterval(() => {
+    renderOnlineClock();
+    if (!forfeitDeclared && !currentMatchFinished && latestRoomState && !latestRoomState.finished && Number(latestRoomState.turn) === roomColor && remainingClock(roomColor) <= 0) {
+      claimTimeForfeit();
+    }
+  }, 250);
 }
 
 function stopPresenceTracking(markOffline = false) {
@@ -265,6 +353,7 @@ function watchState() {
     const revision = Number(data.revision || 0);
     if (revision <= lastRevision) return;
     lastRevision = revision;
+    fallbackTurnStartedAt = Number(data.turnStartedAt) || correctedNow();
 
     if (!matchStarted) {
       window.onlineMode = true;
@@ -310,6 +399,8 @@ function watchState() {
       : `部屋 ${roomCode} ／ ${roomColor === 0 ? "白" : "黒"} ／ ${window.turn === roomColor ? "あなたの手番" : "相手の手番"}`);
     updateOpponentPresenceMessage();
     updateRematchControls();
+    renderOnlineClock();
+    startClockUpdates();
 
     if (data.finished && lastFinishedRevision !== revision) {
       lastFinishedRevision = revision;
@@ -342,6 +433,8 @@ async function startHostMatch() {
     await set(roomStateRef, {
       board: standardBoard(),
       turn: 0,
+      clocks: [INITIAL_CLOCK_MS, INITIAL_CLOCK_MS],
+      turnStartedAt: correctedNow(),
       revision: 0,
       finished: false,
       winner: -1
@@ -377,6 +470,9 @@ window.openOnlineSetup = function () {
 };
 
 window.leaveOnlineGame = function () {
+  if (clockInterval) clearInterval(clockInterval);
+  clockInterval = null;
+  if (clockEl) clockEl.hidden = true;
   stopRoomListeners();
   stopPresenceTracking(true);
   if (window.setOnlineBoardOrientation) window.setOnlineBoardOrientation(false);
@@ -425,6 +521,8 @@ if (acceptRematchButton) acceptRematchButton.addEventListener("click", async () 
       return {
         board: standardBoard(),
         turn: 1 - Number(current.turn),
+        clocks: [INITIAL_CLOCK_MS, INITIAL_CLOCK_MS],
+        turnStartedAt: correctedNow(),
         revision: Number(current.revision || 0) + 1,
         finished: false,
         winner: -1
@@ -461,6 +559,13 @@ if (declineRematchButton) declineRematchButton.addEventListener("click", async (
 
 window.publishOnlineState = async function () {
   if (!window.onlineMode || !roomStateRef || roomColor !== 1 - window.turn) return;
+  const mover = 1 - window.turn;
+  const clocks = latestRoomState ? clockValues(latestRoomState) : [INITIAL_CLOCK_MS, INITIAL_CLOCK_MS];
+  clocks[mover] = remainingClock(mover);
+  if (clocks[mover] <= 0) {
+    await claimTimeForfeit();
+    return;
+  }
   const counts = [0, 0];
   const kings = [false, false];
   for (const row of window.board) for (const piece of row) {
@@ -475,15 +580,29 @@ window.publishOnlineState = async function () {
   else if (!window.CanMove(window.turn)) winner = 1 - window.turn;
 
   const revision = lastRevision + 1;
+  const turnStartedAt = correctedNow();
   try {
     await set(roomStateRef, {
       board: window.board.map(row => row.slice()),
       turn: window.turn,
+      clocks,
+      turnStartedAt,
       revision,
       finished: winner !== -1,
       winner
     });
     lastRevision = revision;
+    latestRoomState = {
+      board: window.board.map(row => row.slice()),
+      turn: window.turn,
+      clocks,
+      turnStartedAt,
+      revision,
+      finished: winner !== -1,
+      winner
+    };
+    fallbackTurnStartedAt = turnStartedAt;
+    renderOnlineClock();
   } catch (error) {
     status(`手を送信できませんでした: ${error.message}`);
   }
