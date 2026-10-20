@@ -121,7 +121,9 @@ function formatClock(milliseconds) {
 
 function renderOnlineClock() {
   if (!clockEl) return;
-  const visible = matchStarted && Boolean(latestRoomState);
+  // Both the room creator and code joiner use watchState(); base visibility
+  // on its shared room state rather than role-specific setup timing.
+  const visible = Boolean(roomStateRef && stateWatchStarted && latestRoomState);
   clockEl.hidden = !visible;
   if (!visible) return;
   const active = latestRoomState.finished || currentMatchFinished ? -1 : Number(latestRoomState.turn);
